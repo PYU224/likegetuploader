@@ -1,0 +1,21 @@
+# likegetuploader (Apache)
+Options -Indexes
+DirectoryIndex index.php
+
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  # uploader.jp と同じ形の URL: /download/123
+  RewriteRule ^download/([0-9]+)/?$ file.php?id=$1 [L,QSA]
+  # AdSense 等の ads.txt（管理画面で編集）
+  RewriteRule ^ads\.txt$ adstxt.php [L]
+  # 中身を外から見せない
+  RewriteRule ^(data|inc|tools)(/|$) - [F,L]
+  RewriteRule ^config(\.sample)?\.php$ - [F,L]
+</IfModule>
+
+# PHP のアップロード上限（分割送信なので 1回分=16MB あれば足りる）
+<IfModule mod_php.c>
+  php_value upload_max_filesize 16M
+  php_value post_max_size 20M
+  php_value max_execution_time 300
+</IfModule>

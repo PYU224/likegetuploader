@@ -1,0 +1,16 @@
+# 設定（パスワード・キーを含む）
+/config.php
+
+# データ（DB・アップロードされたファイル・広告タグなど）
+/data/*
+!/data/.htaccess
+
+# OS / エディタ
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+
+# バックアップツールの出力
+*_backup/

@@ -1,0 +1,24 @@
+# likegetuploader 用 nginx 設定例（server ブロックの中に追記）
+# /var/www/likegetuploader に設置した場合
+
+root /var/www/likegetuploader;
+index index.php;
+client_max_body_size 20m;   # 分割送信なので 20MB で十分
+
+location ~ ^/(data|inc|tools)/ { deny all; }
+location ~ ^/config(\.sample)?\.php$ { deny all; }
+location = /ads.txt { rewrite ^ /adstxt.php last; }
+location ~ ^/download/([0-9]+)/?$ { rewrite ^/download/([0-9]+)/?$ /file.php?id=$1 last; }
+
+location ~ \.php$ {
+    include fastcgi_params;
+    fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+    fastcgi_pass unix:/run/php/php8.3-fpm.sock;
+    fastcgi_read_timeout 300;
+}
+
+# config.php で 'sendfile' => 'nginx' にすると、ダウンロードを nginx が直接送る（高速・省メモリ）
+location /_lgu_files/ {
+    internal;
+    alias /var/www/likegetuploader/data/files/;
+}
