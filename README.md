@@ -166,6 +166,10 @@ data/            DB・ファイル・設定テキスト（外部から見えな�
 tools/           uploader.jp バックアップ・取り込み・S3移行ツール
 ```
 
+## 変更履歴
+
+[CHANGELOG.md](CHANGELOG.md) を見てください。
+
 ## ライセンス
 
 [MIT License](LICENSE)

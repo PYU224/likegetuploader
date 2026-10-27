@@ -101,14 +101,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             flash('通報を対応済みにしました。');
             break;
         case 'ads':
-            foreach (array_keys(AD_SLOTS) as $slot) {
-                file_put_contents(DATA . "/ads/$slot.html", (string)($_POST['ad'][$slot] ?? ''));
+            // 「広告枠」タブに無い枠（head / footer は「解析・共通タグ」タブ）は書き換えない
+            foreach (AD_SLOTS as $slot => [$label, $raw]) {
+                if ($raw || !isset($_POST['ad'][$slot])) continue;
+                file_put_contents(DATA . "/ads/$slot.html", (string)$_POST['ad'][$slot]);
             }
             flash('広告枠を保存しました。');
             break;
         case 'tags':
             foreach (['head', 'footer'] as $slot) {
-                file_put_contents(DATA . "/ads/$slot.html", (string)($_POST['ad'][$slot] ?? ''));
+                if (!isset($_POST['ad'][$slot])) continue;
+                file_put_contents(DATA . "/ads/$slot.html", (string)$_POST['ad'][$slot]);
             }
             site_text_save('ads.txt', str_replace("\r\n", "\n", (string)($_POST['adstxt'] ?? '')));
             flash('解析・共通タグを保存しました。');
