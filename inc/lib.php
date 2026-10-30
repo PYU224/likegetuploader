@@ -2,7 +2,7 @@
 declare(strict_types=1);
 
 const APP_NAME = 'likegetuploader';
-const APP_VERSION = '1.3.3';
+const APP_VERSION = '1.3.4';
 const APP_REPO = 'https://github.com/PYU224/likegetuploader';
 define('ROOT', dirname(__DIR__));
 define('DATA', ROOT . '/data');

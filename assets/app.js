@@ -21,6 +21,16 @@
   var maxSize = parseInt(form.dataset.max, 10) || 0;
   var csrf = form.elements.csrf.value;
 
+  // DLパスワード欄はチェックを入れた時だけ使えるようにする（自動入力でうっかりかかるのを防ぐ）
+  var useDlpass = document.getElementById('use-dlpass');
+  var dlpassInput = document.getElementById('dlpass');
+  if (useDlpass && dlpassInput) {
+    useDlpass.addEventListener('change', function () {
+      dlpassInput.disabled = dlpassInput.hidden = !useDlpass.checked;
+      if (useDlpass.checked) dlpassInput.focus(); else dlpassInput.value = '';
+    });
+  }
+
   ['dragenter', 'dragover'].forEach(function (ev) {
     drop.addEventListener(ev, function (e) { e.preventDefault(); drop.classList.add('over'); });
   });
@@ -115,7 +125,7 @@
       action: 'init', name: file.name, size: file.size,
       comment: form.elements.comment.value,
       delkey: form.elements.delkey.value,
-      dlpass: form.elements.dlpass.value,
+      dlpass: useDlpass && useDlpass.checked ? form.elements.dlpass.value : '',
       uppass: form.elements.uppass ? form.elements.uppass.value : '',
       'cf-turnstile-response': tsToken()
     }));

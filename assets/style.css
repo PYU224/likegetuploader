@@ -250,3 +250,8 @@ select { font: inherit; font-size: 16px; width: 100%; padding: 7px 10px; border:
 .contact.is-done { opacity: .6; }
 .tag { font-size: 11.5px; background: var(--ok-bg); color: var(--ok-ink); padding: 1px 8px; border-radius: 10px; }
 .btnrow { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+
+/* v1.3.4 */
+.dlpass-field { display: flex; flex-direction: column; justify-content: flex-end; gap: 6px; }
+.dlpass-field .check { display: flex; align-items: center; gap: 6px; font-size: 13.5px; }
+.dlpass-field input[type=password] { margin-top: 0; }

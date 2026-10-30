@@ -73,11 +73,13 @@ page_head($q !== '' ? "「{$q}」の検索結果" : '', 'list', $q !== '' ? ['no
         <textarea name="comment" rows="2" maxlength="<?= (int)cfg('max_comment') ?>" placeholder="シナリオ名・バージョン・内容など"></textarea>
       </label>
       <label>削除キー <small>（後で自分で消すため）</small>
-        <input type="password" name="delkey" maxlength="64" autocomplete="new-password">
+        <input type="password" name="delkey" maxlength="64" autocomplete="off" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" data-form-type="other">
       </label>
-      <label>DLパスワード <small>（任意・かけたい時だけ）</small>
-        <input type="password" name="dlpass" maxlength="64" autocomplete="new-password">
-      </label>
+      <div class="dlpass-field">
+        <label class="check"><input type="checkbox" id="use-dlpass"> ダウンロードにパスワードをかける <small>（かけたい時だけ）</small></label>
+        <!-- ブラウザやパスワード管理ソフトが勝手に入力しないよう、チェックを入れるまで無効にしておく -->
+        <input type="password" name="dlpass" id="dlpass" maxlength="64" placeholder="DLパスワード" disabled hidden autocomplete="off" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" data-form-type="other">
+      </div>
       <?php if (cfg('upload_password') !== ''): ?>
       <label>アップロードパスワード
         <input type="password" name="uppass" maxlength="64" required>

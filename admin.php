@@ -55,6 +55,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 ->execute([clean_name((string)$_POST['name']), trim((string)$_POST['comment']), $id]);
             flash("No.$id を更新しました。");
             break;
+        case 'unlock':
+            $pdo->prepare('UPDATE files SET dlpass = NULL WHERE id = ?')->execute([$id]);
+            flash("No.$id のDLパスワードを外しました。");
+            break;
         case 'hide':
             $pdo->prepare('UPDATE files SET hidden = 1 - hidden WHERE id = ?')->execute([$id]);
             flash("No.$id の公開状態を切り替えました。");
@@ -195,6 +199,7 @@ if ($tab === 'files'):
           <td class="c-date"><?= fmt_date((int)$r['created_at']) ?></td>
           <td class="c-dl"><?= (int)$r['downloads'] ?></td>
           <td class="ops">
+            <?php if ($r['dlpass'] !== null): ?><?= act_btn('unlock', (int)$r['id'], '🔒 DLパスワードを外す', '', "No.{$r['id']} のDLパスワードを外して、誰でもダウンロードできるようにしますか？") ?><?php endif; ?>
             <?= act_btn('hide', (int)$r['id'], $r['hidden'] ? '公開' : '非公開') ?>
             <?= act_btn('delete', (int)$r['id'], '削除', 'danger', "No.{$r['id']} を削除しますか？") ?>
             <?php if ($r['ip'] !== ''): ?><?= act_btn('ban', (int)$r['id'], '投稿者を禁止', '', '投稿者をアップロード禁止にしますか？') ?><?php endif; ?>
