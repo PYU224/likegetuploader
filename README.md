@@ -44,8 +44,29 @@ uploader.jp のようなリスト式アップローダー。
 
 ## 必要なもの
 
-- PHP 8.1 以上（拡張: pdo_sqlite, fileinfo, mbstring, curl, openssl）
-- Apache（同梱の `.htaccess` を使用）または nginx（`nginx.conf.sample` を参照）
+### PHP のバージョン
+
+| バージョン | 対応 | PHP 公式のセキュリティサポート |
+|---|---|---|
+| 8.4 | ✅ 推奨（動作確認済み） | 2028年12月末まで |
+| 8.3 | ✅ 推奨（動作確認済み） | 2027年12月末まで |
+| 8.2 | ⚠️ 動作するが非推奨 | 2026年12月末で終了 |
+| 8.1 以下 | ❌ 非対応 | 終了済み |
+
+セキュリティのため、PHP 公式のサポートが続いているバージョン（8.3 / 8.4）で使ってください。
+
+### PHP の拡張機能
+
+`pdo_sqlite`、`fileinfo`、`mbstring`、`curl`、`openssl` が必要です。
+aaPanel などのサーバー管理パネルでは `fileinfo` が最初から入っていないことがあるので、PHP の「Install extensions」から追加してください（入っていないとアップロード時にエラーになります）。
+
+### Web サーバー
+
+Apache（同梱の `.htaccess` を使用）または nginx（`nginx.conf.sample` を参照）。データベースサーバーは不要です。
+
+### うまく表示されないとき
+
+- **「No input file specified.」と出る**：PHP の `open_basedir` で、設置したフォルダへのアクセスが許可されていません。サーバーのエラーログに `open_basedir restriction in effect` と出ていればこれが原因です。PHP の設定ファイル（`php.ini` または `php-fpm.conf`）の `open_basedir` に設置フォルダを書き加えるか、サイトごとの設定（aaPanel なら Anti-XSS）で許可してください。PHP のバージョンを切り替えた時に起きやすいです。
 
 ## 設置
 

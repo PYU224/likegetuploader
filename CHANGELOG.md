@@ -3,6 +3,12 @@
 このプロジェクトの主な変更点を記録します。
 書式は [Keep a Changelog](https://keepachangelog.com/ja/1.1.0/) に、バージョン番号は [セマンティック バージョニング](https://semver.org/lang/ja/) に従います。
 
+## 未リリース
+
+### ドキュメント
+- README に対応する PHP のバージョン（推奨 8.3 / 8.4、8.2 は非推奨、8.1 以下は非対応）と必要な拡張機能を明記
+- README に「No input file specified.」と表示される場合（`open_basedir` の設定）の対処を追記
+
 ## 1.3.3 - 2026-10-29
 
 ### 追加
