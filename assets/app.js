@@ -31,29 +31,60 @@
     if (e.dataTransfer && e.dataTransfer.files.length) input.files = e.dataTransfer.files;
   });
 
+  // 大きさに合わせて B / KB / MB / GB / TB で表示（サーバー側の fmt_size と同じ表記）
   function fmt(b) {
-    var u = ['B', 'KB', 'MB', 'GB'], i = 0;
-    while (b >= 1024 && i < 3) { b /= 1024; i++; }
-    return (i ? b.toFixed(1) : b) + ' ' + u[i];
+    var u = ['B', 'KB', 'MB', 'GB', 'TB'], i = 0;
+    while (i < 4 && Math.round(b * 10) / 10 >= 1024) { b /= 1024; i++; }
+    if (!i) return b.toLocaleString('en-US') + ' B';
+    return b.toFixed(1).replace(/\.0$/, '') + ' ' + u[i];
+  }
+
+  // 通信の失敗のうち、時間をおけば直る可能性があるもの（回線断・タイムアウト・サーバー側の一時的な不調）
+  function fail(msg, retryable) {
+    var e = new Error(msg);
+    e.retryable = !!retryable;
+    return e;
   }
 
   function post(data, onProgress) {
     return new Promise(function (resolve, reject) {
       var xhr = new XMLHttpRequest();
       xhr.open('POST', 'upload.php');
+      xhr.timeout = 10 * 60 * 1000;
       xhr.setRequestHeader('Accept', 'application/json');
       xhr.setRequestHeader('X-CSRF', csrf);
       if (onProgress) xhr.upload.onprogress = function (e) { if (e.lengthComputable) onProgress(e.loaded); };
       xhr.onload = function () {
+        var temporary = xhr.status >= 500 || xhr.status === 429 || xhr.status === 408;
         var res;
         try { res = JSON.parse(xhr.responseText); } catch (e) {
-          return reject(new Error(xhr.status === 413 ? '1回の送信が大きすぎます（サーバー設定を確認）' : 'サーバーエラー (' + xhr.status + ')'));
+          if (xhr.status === 413) return reject(fail('1回の送信が大きすぎます（サーバー設定を確認）', false));
+          return reject(fail('サーバーエラー (' + xhr.status + ')', temporary || xhr.status === 0));
         }
-        if (res.ok) resolve(res); else reject(new Error(res.error || 'エラー'));
+        if (res.ok) resolve(res); else reject(fail(res.error || 'エラー', temporary));
       };
-      xhr.onerror = function () { reject(new Error('通信エラー')); };
+      xhr.onerror = function () { reject(fail('通信エラー', true)); };
+      xhr.ontimeout = function () { reject(fail('タイムアウト', true)); };
       xhr.send(data);
     });
+  }
+
+  // 一時的な失敗なら、間隔を空けて自動で送り直す（5秒→10秒→20秒→30秒→60秒）
+  var RETRY_WAITS = [5, 10, 20, 30, 60];
+  function sleep(sec) { return new Promise(function (r) { setTimeout(r, sec * 1000); }); }
+  async function postRetry(makeData, onProgress, onRetry) {
+    for (var attempt = 0; ; attempt++) {
+      try {
+        return await post(makeData(), onProgress);
+      } catch (err) {
+        if (!err.retryable || attempt >= RETRY_WAITS.length) throw err;
+        var wait = RETRY_WAITS[attempt];
+        for (var left = wait; left > 0; left--) {
+          if (onRetry) onRetry(err, attempt + 1, RETRY_WAITS.length, left);
+          await sleep(1);
+        }
+      }
+    }
   }
 
   function fd(obj) {
@@ -93,18 +124,25 @@
     var sent = 0;
     for (var i = 0; sent < file.size; i++) {
       var blob = file.slice(sent, sent + size);
-      var f = fd({ action: 'chunk', token: init.token, index: i });
-      f.append('blob', blob, 'blob');
       var base = sent;
-      await post(f, function (loaded) {
+      var index = i;
+      await postRetry(function () {
+        var f = fd({ action: 'chunk', token: init.token, index: index });
+        f.append('blob', blob, 'blob');
+        return f;
+      }, function (loaded) {
         var p = Math.min(1, (base + loaded) / file.size);
         bar.style.width = (p * 100).toFixed(1) + '%';
         stat.textContent = Math.floor(p * 100) + '%';
-      });
+      }, showRetry);
       sent += blob.size;
     }
     stat.textContent = '確認中…';
-    return post(fd({ action: 'finish', token: init.token }));
+    return postRetry(function () { return fd({ action: 'finish', token: init.token }); }, null, showRetry);
+
+    function showRetry(err, n, max, left) {
+      stat.textContent = err.message + '。' + left + '秒後に再送します（' + n + '/' + max + '回目）';
+    }
   }
 
   form.addEventListener('submit', async function (e) {

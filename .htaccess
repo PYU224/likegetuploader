@@ -13,9 +13,9 @@ DirectoryIndex index.php
   RewriteRule ^config(\.sample)?\.php$ - [F,L]
 </IfModule>
 
-# PHP のアップロード上限（分割送信なので 1回分=16MB あれば足りる）
+# PHP のアップロード上限（分割送信なので、1回分の chunk_size より大きければよい。chunk_size 16MB まで対応）
 <IfModule mod_php.c>
-  php_value upload_max_filesize 16M
-  php_value post_max_size 20M
+  php_value upload_max_filesize 32M
+  php_value post_max_size 40M
   php_value max_execution_time 300
 </IfModule>

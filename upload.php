@@ -103,6 +103,8 @@ if ($act === 'chunk') {
     $token = (string)($_POST['token'] ?? '');
     $m = tmp_meta($token);
     $idx = (int)($_POST['index'] ?? -1);
+    // 再送で同じ分割がもう一度届いた場合（前回は保存できたが返事が届かなかった）は、保存済みとして扱う
+    if ($idx >= 0 && $idx < $m['next']) out(['received' => $m['received'], 'next' => $m['next'], 'duplicate' => true]);
     if ($idx !== $m['next']) fail('送信順序が不正です。');
     $blob = $_FILES['blob'] ?? null;
     if (!$blob || $blob['error'] !== UPLOAD_ERR_OK) fail('送信に失敗しました（サーバーのアップロード上限を確認してください）。');
@@ -118,33 +120,44 @@ if ($act === 'chunk') {
         $ctx = unserialize(base64_decode($m['md5ctx']));
         hash_update_file($ctx, $blob['tmp_name']);
         try {
-            $m['etags'][] = s3_mp_part($m['skey'], $m['s3_upload'], $idx + 1, $blob['tmp_name']);
+            $m['etags'][$idx] = s3_mp_part($m['skey'], $m['s3_upload'], $idx + 1, $blob['tmp_name']);
         } catch (Throwable $e) {
             error_log('likegetuploader: ' . $e->getMessage());
             fail('保存先ストレージへの送信に失敗しました。もう一度お試しください。', 502);
         }
         $m['md5ctx'] = base64_encode(serialize($ctx));
     } else {
+        // 追記ではなく「受信済みの位置」に書く（途中で失敗した書き込みが残っていても上書きされる）
         $in = fopen($blob['tmp_name'], 'rb');
-        $outf = fopen(DATA . "/tmp/$token.part", 'ab');
-        stream_copy_to_stream($in, $outf);
+        $outf = fopen(DATA . "/tmp/$token.part", 'c+b');
+        ftruncate($outf, $m['received']);
+        fseek($outf, $m['received']);
+        $copied = stream_copy_to_stream($in, $outf);
         fclose($in);
         fclose($outf);
+        if ($copied !== $len) fail('一時ファイルへの書き込みに失敗しました。', 500);
     }
     $m['next']++;
     $m['received'] += $len;
     save_meta($token, $m);
-    out(['received' => $m['received']]);
+    out(['received' => $m['received'], 'next' => $m['next']]);
 }
 
 if ($act === 'finish') {
     $token = (string)($_POST['token'] ?? '');
+    // 再送で finish がもう一度届いた場合は、前回の結果を返す
+    if (preg_match('/^[0-9a-f]{32}$/', $token) && is_file(DATA . "/tmp/$token.done.json")) {
+        $done = json_decode((string)file_get_contents(DATA . "/tmp/$token.done.json"), true);
+        if (($done['ip'] ?? '') === ip_hash()) out($done['result']);
+    }
     $m = tmp_meta($token);
     if ($m['received'] !== $m['size']) fail('ファイルが最後まで届いていません。');
 
     if (!empty($m['s3_upload'])) {
         try {
-            s3_mp_complete($m['skey'], $m['s3_upload'], $m['etags']);
+            $etags = $m['etags'];
+            ksort($etags);
+            s3_mp_complete($m['skey'], $m['s3_upload'], array_values($etags));
         } catch (Throwable $e) {
             error_log('likegetuploader: ' . $e->getMessage());
             s3_mp_abort($m['skey'], $m['s3_upload']);
@@ -174,9 +187,11 @@ if ($act === 'finish') {
     }
     $pdo->commit();
     @unlink(meta_path($token));
+    $result = ['id' => $id, 'url' => file_url($id), 'link' => file_link($id), 'name' => $m['name']];
+    file_put_contents(DATA . "/tmp/$token.done.json", json_encode(['ip' => ip_hash(), 'result' => $result], JSON_UNESCAPED_UNICODE));
     event_add('upload', $id);
     notify_admin('upload', "新しいアップロード No.$id", "ファイル: {$m['name']}\nサイズ: " . fmt_size($m['size']) . "\nコメント: {$m['comment']}\n\n" . file_url($id) . "\n管理画面: " . base_url() . '/admin.php');
-    out(['id' => $id, 'url' => file_url($id), 'link' => file_link($id), 'name' => $m['name']]);
+    out($result);
 }
 
 fail('不正な操作です。');

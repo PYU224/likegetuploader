@@ -2,7 +2,7 @@
 declare(strict_types=1);
 
 const APP_NAME = 'likegetuploader';
-const APP_VERSION = '1.3.1';
+const APP_VERSION = '1.3.3';
 const APP_REPO = 'https://github.com/PYU224/likegetuploader';
 define('ROOT', dirname(__DIR__));
 define('DATA', ROOT . '/data');
@@ -161,14 +161,17 @@ function is_admin(): bool
     return !empty($_SESSION['admin']);
 }
 
+// 大きさに合わせて B / KB / MB / GB / TB で表示（例: 512 B, 38.3 MB, 10 GB）
 function fmt_size(int $b): string
 {
-    if ($b < 1024) return $b . ' B';
-    $u = ['KB', 'MB', 'GB', 'TB'];
-    $v = $b / 1024;
+    $u = ['B', 'KB', 'MB', 'GB', 'TB'];
+    $v = (float)max(0, $b);
     $i = 0;
-    while ($v >= 1024 && $i < 3) { $v /= 1024; $i++; }
-    return number_format($v, 1) . ' ' . $u[$i];
+    while ($i < 4 && round($v, 1) >= 1024) { $v /= 1024; $i++; }
+    if ($i === 0) return number_format($b) . ' B';
+    $s = number_format($v, 1);
+    if (str_ends_with($s, '.0')) $s = substr($s, 0, -2);
+    return $s . ' ' . $u[$i];
 }
 
 function fmt_date(int $t, bool $long = false): string

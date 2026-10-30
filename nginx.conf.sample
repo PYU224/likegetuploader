@@ -3,7 +3,7 @@
 
 root /var/www/likegetuploader;
 index index.php;
-client_max_body_size 20m;   # 分割送信なので 20MB で十分
+client_max_body_size 40m;   # 分割送信なので chunk_size(〜16MB) より大きければ十分
 
 location ~ ^/(data|inc|tools)/ { deny all; }
 location ~ ^/config(\.sample)?\.php$ { deny all; }

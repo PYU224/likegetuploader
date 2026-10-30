@@ -49,7 +49,7 @@ function th_sort(string $key, string $label, string $cls = ''): string
     return '<th class="' . $cls . '"><a href="' . h(qs(['sort' => $key, 'order' => $next, 'page' => 1])) . '">' . h($label) . $mark . '</a></th>';
 }
 
-$maxMB = round(max_file_size() / 1048576, 1);
+$maxSize = fmt_size(max_file_size());
 page_head($q !== '' ? "「{$q}」の検索結果" : '', 'list', $q !== '' ? ['noindex' => true] : []);
 ?>
 <section class="intro">
@@ -57,7 +57,7 @@ page_head($q !== '' ? "「{$q}」の検索結果" : '', 'list', $q !== '' ? ['no
   <p><?= h(cfg('description')) ?></p>
 </section>
 <?php if (demo_on()): ?>
-<div class="notice demo">これはデモ用のアップローダーです。アップロードされたファイルは <?= (int)(cfg('demo')['keep_hours'] ?? 24) ?> 時間で自動的に削除されます（1ファイル <?= $maxMB ?>MB まで）。</div>
+<div class="notice demo">これはデモ用のアップローダーです。アップロードされたファイルは <?= (int)(cfg('demo')['keep_hours'] ?? 24) ?> 時間で自動的に削除されます（1ファイル <?= h($maxSize) ?> まで）。</div>
 <?php endif; ?>
 
 <details class="box upload" id="upload">
@@ -66,7 +66,7 @@ page_head($q !== '' ? "「{$q}」の検索結果" : '', 'list', $q !== '' ? ['no
     <input type="hidden" name="csrf" value="<?= h(csrf_token()) ?>">
     <label class="drop" id="drop">
       <input type="file" name="file" id="file" multiple required>
-      <span class="drop-text"><b>ファイルを選択</b> またはここへドラッグ（1ファイル <?= $maxMB ?>MB まで・複数可）</span>
+      <span class="drop-text"><b>ファイルを選択</b> またはここへドラッグ（1ファイル <?= h($maxSize) ?> まで・複数可）</span>
     </label>
     <div class="grid2">
       <label class="full">コメント <small>（<?= (int)cfg('max_comment') ?>字以内）</small>
