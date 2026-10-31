@@ -19,8 +19,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             event_add('delfail', $id);
             fail('削除キーが違います。');
         }
-        db()->prepare('DELETE FROM files WHERE id = ?')->execute([$id]);
-        storage_delete($f);
+        if (!delete_file($f)) fail('削除を完了できませんでした。ファイルは非公開の削除待ちにしました。管理人に連絡してください。', 503);
         flash("No.{$id} を削除しました。");
         redirect(base_url() . '/');
     }
@@ -63,6 +62,8 @@ page_head($f['name'], '', [
     <dt>URL</dt><dd><input class="copy" readonly value="<?= h($url) ?>"></dd>
   </dl>
 
+  <?php if ($f['delete_pending']): ?><p class="msg error">削除待ちです。管理画面から削除を再試行してください。</p>
+  <?php else: ?>
   <form class="dlform" method="post" action="dl.php">
     <input type="hidden" name="csrf" value="<?= h(csrf_token()) ?>">
     <input type="hidden" name="id" value="<?= (int)$f['id'] ?>">
@@ -73,6 +74,7 @@ page_head($f['name'], '', [
     <button class="btn btn-primary btn-big">⇩ ダウンロード</button>
     <p class="small">ダウンロードした時点で<a href="rules.php" target="_blank">利用規約</a>に同意したものとみなします。</p>
   </form>
+  <?php endif; ?>
 </article>
 
 <?= ad('detail_bottom') ?>

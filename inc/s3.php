@@ -157,7 +157,8 @@ function s3_mp_complete(string $key, string $uploadId, array $etags): void
 
 function s3_mp_abort(string $key, string $uploadId): void
 {
-    try { s3_request('DELETE', $key, ['uploadId' => $uploadId]); } catch (Throwable $e) {}
+    $r = s3_request('DELETE', $key, ['uploadId' => $uploadId]);
+    if ($r['status'] !== 404) s3_check($r, 'AbortMultipartUpload'); // 既に完了/中止済みなら404
 }
 
 // ---- 単発操作
@@ -195,7 +196,7 @@ function s3_put_file(string $key, string $file, string $filename): void
 
 function s3_delete(string $key): void
 {
-    s3_request('DELETE', $key);
+    s3_check(s3_request('DELETE', $key), 'DeleteObject');
 }
 
 function s3_exists(string $key): bool
