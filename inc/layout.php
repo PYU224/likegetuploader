@@ -11,6 +11,7 @@ function abs_url(string $path): string
  */
 function page_head(string $title = '', string $active = '', array $meta = []): void
 {
+    session_start_once(); // Cookie/IDの更新はHTML出力より前に行う
     $site = (string)cfg('title');
     $full = $title === '' ? $site : $title . ' - ' . $site;
     $desc = mb_strimwidth(preg_replace('/\s+/u', ' ', $meta['description'] ?? (string)cfg('description')), 0, 200, '…');

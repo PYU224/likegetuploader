@@ -12,7 +12,7 @@ if (!is_admin()) {
         $pw = (string)cfg('admin_password');
         if ($pw !== '' && $pw !== 'change-me' && hash_equals($pw, (string)($_POST['password'] ?? ''))) {
             session_regenerate_id(true);
-            $_SESSION['admin'] = true;
+            $_SESSION['admin'] = admin_session_proof();
             redirect('admin.php');
         }
         event_add('adminfail');
@@ -60,14 +60,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             flash("No.$id のDLパスワードを外しました。");
             break;
         case 'hide':
-            $pdo->prepare('UPDATE files SET hidden = 1 - hidden WHERE id = ?')->execute([$id]);
+            $pdo->prepare('UPDATE files SET hidden = 1 - hidden WHERE id = ? AND delete_pending = 0')->execute([$id]);
             flash("No.$id の公開状態を切り替えました。");
             break;
         case 'delete':
-            if ($row = file_row($id)) storage_delete($row);
-            $pdo->prepare('DELETE FROM files WHERE id = ?')->execute([$id]);
-            $pdo->prepare('UPDATE reports SET resolved = 1 WHERE file_id = ?')->execute([$id]);
-            flash("No.$id を削除しました。");
+            $row = file_row($id);
+            flash(!$row || delete_file($row) ? "No.$id を削除しました。" : "No.$id は削除に失敗しました。非公開の削除待ちとして保持しています。削除ボタンで再試行できます。");
             break;
         case 'ban':
             $st = $pdo->prepare('SELECT ip FROM files WHERE id = ?');
@@ -200,7 +198,8 @@ if ($tab === 'files'):
           <td class="c-dl"><?= (int)$r['downloads'] ?></td>
           <td class="ops">
             <?php if ($r['dlpass'] !== null): ?><?= act_btn('unlock', (int)$r['id'], '🔒 DLパスワードを外す', '', "No.{$r['id']} のDLパスワードを外して、誰でもダウンロードできるようにしますか？") ?><?php endif; ?>
-            <?= act_btn('hide', (int)$r['id'], $r['hidden'] ? '公開' : '非公開') ?>
+            <?php if ($r['delete_pending']): ?><span class="tag">削除待ち</span>
+            <?php else: ?><?= act_btn('hide', (int)$r['id'], $r['hidden'] ? '公開' : '非公開') ?><?php endif; ?>
             <?= act_btn('delete', (int)$r['id'], '削除', 'danger', "No.{$r['id']} を削除しますか？") ?>
             <?php if ($r['ip'] !== ''): ?><?= act_btn('ban', (int)$r['id'], '投稿者を禁止', '', '投稿者をアップロード禁止にしますか？') ?><?php endif; ?>
           </td>

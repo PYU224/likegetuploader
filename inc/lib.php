@@ -2,7 +2,7 @@
 declare(strict_types=1);
 
 const APP_NAME = 'likegetuploader';
-const APP_VERSION = '1.3.4';
+const APP_VERSION = '1.3.5';
 const APP_REPO = 'https://github.com/PYU224/likegetuploader';
 define('ROOT', dirname(__DIR__));
 define('DATA', ROOT . '/data');
@@ -54,6 +54,7 @@ function db(): PDO
         PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
     ]);
     $pdo->exec('PRAGMA journal_mode=WAL; PRAGMA busy_timeout=5000; PRAGMA foreign_keys=ON;');
+    $pdo->exec('BEGIN IMMEDIATE');
     $pdo->exec(<<<'SQL'
         CREATE TABLE IF NOT EXISTS files (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -84,6 +85,10 @@ function db(): PDO
     // v1.1: S3保存用の列を追加
     $cols = array_column($pdo->query('PRAGMA table_info(files)')->fetchAll(), 'name');
     if (!in_array('skey', $cols, true)) $pdo->exec('ALTER TABLE files ADD COLUMN skey TEXT');
+    if (!in_array('delete_pending', $cols, true)) $pdo->exec('ALTER TABLE files ADD COLUMN delete_pending INTEGER NOT NULL DEFAULT 0');
+    if (!in_array('upload_token', $cols, true)) $pdo->exec('ALTER TABLE files ADD COLUMN upload_token TEXT');
+    $pdo->exec('CREATE UNIQUE INDEX IF NOT EXISTS files_upload_token ON files(upload_token)');
+    $pdo->exec('COMMIT');
     demo_purge($pdo);
     return $pdo;
 }
@@ -127,16 +132,39 @@ function event_add(string $kind, int $ref = 0): void
     }
 }
 
+// Hostヘッダーではなく設置ディレクトリと設定に結び付ける。
+function session_scope(): string
+{
+    return hash('sha256', ROOT . "\0" . (string)cfg('secret'));
+}
+
+function admin_session_proof(): string
+{
+    return hash_hmac('sha256', session_scope() . "\0" . session_id(),
+        (string)cfg('admin_password') . "\0" . (string)cfg('secret'));
+}
+
 function session_start_once(): void
 {
     if (session_status() === PHP_SESSION_ACTIVE) return;
-    session_name('lgu');
+    ini_set('session.use_strict_mode', '1');
+    ini_set('session.use_only_cookies', '1');
+    ini_set('session.use_trans_sid', '0');
+    session_name('lgu' . substr(session_scope(), 0, 20));
     session_set_cookie_params([
+        'path' => base_path(),
+        'domain' => '', // 親ドメインのCookie設定を引き継がない
         'httponly' => true,
         'samesite' => 'Lax',
         'secure'   => !empty($_SERVER['HTTPS']) || ($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https',
     ]);
     session_start();
+    if (($_SESSION['scope'] ?? null) !== session_scope()) {
+        // 別の設置先の有効なIDが手動で渡されても、その認証・CSRF・Turnstile状態は使わない。
+        // 元の設置先のセッションは破棄しない。
+        session_regenerate_id(false);
+        $_SESSION = ['scope' => session_scope()];
+    }
 }
 
 function csrf_token(): string
@@ -158,7 +186,11 @@ function csrf_check(): void
 function is_admin(): bool
 {
     session_start_once();
-    return !empty($_SESSION['admin']);
+    $proof = $_SESSION['admin'] ?? null;
+    $password = (string)cfg('admin_password');
+    return $password !== '' && $password !== 'change-me'
+        && ($_SESSION['scope'] ?? null) === session_scope()
+        && is_string($proof) && hash_equals(admin_session_proof(), $proof);
 }
 
 // 大きさに合わせて B / KB / MB / GB / TB で表示（例: 512 B, 38.3 MB, 10 GB）
@@ -214,9 +246,29 @@ function clean_name(string $name): string
 function storage_delete(array $f): void
 {
     if (!empty($f['skey'])) {
-        try { s3_delete($f['skey']); } catch (Throwable $e) { error_log('likegetuploader: ' . $e->getMessage()); }
+        s3_delete($f['skey']);
     } else {
-        @unlink(file_path((int)$f['id']));
+        $path = file_path((int)$f['id']);
+        if ((file_exists($path) || is_link($path)) && !@unlink($path)) throw new RuntimeException('ファイル本体を削除できません。');
+    }
+}
+
+// 失敗時は容量・保存先をDBに残し、非公開の「削除待ち」として再試行できるようにする。
+function delete_file(array $f): bool
+{
+    $pdo = db();
+    $pdo->prepare('UPDATE files SET hidden = 1, delete_pending = 1 WHERE id = ?')->execute([$f['id']]);
+    try {
+        storage_delete($f);
+        $pdo->beginTransaction();
+        $pdo->prepare('DELETE FROM files WHERE id = ?')->execute([$f['id']]);
+        $pdo->prepare('UPDATE reports SET resolved = 1 WHERE file_id = ?')->execute([$f['id']]);
+        $pdo->commit();
+        return true;
+    } catch (Throwable $e) {
+        if ($pdo->inTransaction()) $pdo->rollBack();
+        error_log('likegetuploader delete #' . $f['id'] . ': ' . $e->getMessage());
+        return false;
     }
 }
 
@@ -316,6 +368,7 @@ require __DIR__ . '/layout.php';
 require __DIR__ . '/s3.php';
 require __DIR__ . '/turnstile.php';
 require __DIR__ . '/mail.php';
+require __DIR__ . '/uploads.php';
 
 // ---- デモモード: 新しくアップロードされたファイルを一定時間で自動削除する
 function demo_on(): bool
@@ -327,11 +380,10 @@ function demo_purge(PDO $pdo): void
 {
     if (!demo_on() || random_int(1, 10) !== 1) return;
     $hours = (int)(cfg('demo')['keep_hours'] ?? 24);
-    $st = $pdo->prepare('SELECT * FROM files WHERE imported = 0 AND created_at < ?');
+    $st = $pdo->prepare('SELECT * FROM files WHERE imported = 0 AND delete_pending = 0 AND created_at < ?');
     $st->execute([time() - $hours * 3600]);
     foreach ($st->fetchAll() as $f) {
-        storage_delete($f);
-        $pdo->prepare('DELETE FROM files WHERE id = ?')->execute([$f['id']]);
+        delete_file($f);
     }
 }
 

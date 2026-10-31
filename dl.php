@@ -11,7 +11,7 @@ csrf_check();
 
 $id = (int)($_POST['id'] ?? 0);
 $f = file_row($id);
-if (!$f || ($f['hidden'] && !is_admin())) fail('ファイルが見つかりません。', 404);
+if (!$f || $f['delete_pending'] || ($f['hidden'] && !is_admin())) fail('ファイルが見つかりません。', 404);
 ts_check('download');
 
 if ($f['dlpass'] !== null) {
