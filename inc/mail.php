@@ -1,7 +1,7 @@
 <?php
 declare(strict_types=1);
 // 管理者への通知メール（SMTP・外部ライブラリなし）
-// 対応: SSL(465) / STARTTLS(587) / 暗号化なし(25)、AUTH LOGIN
+// 対応: SSL(465) / STARTTLS(587) / 暗号化なし(25)、AUTH PLAIN / AUTH LOGIN（サーバーが対応している方を自動で選ぶ）
 
 function mailc(string $k, $default = null)
 {
@@ -66,8 +66,15 @@ function smtp_send(string $to, string $subject, string $body, ?string $replyTo =
         fwrite($fp, $c . "\r\n");
         [$code, $text] = $read();
         if (!in_array($code, $ok, true)) {
-            $shown = str_starts_with($c, 'AUTH') || preg_match('/^[A-Za-z0-9+\/=]+$/', $c) ? '(認証情報)' : $c;
-            $hint = str_starts_with($c, 'AUTH') || $shown === '(認証情報)' ? '（ユーザー名・パスワードを確認してください）' : '';
+            $isAuth = str_starts_with($c, 'AUTH') || preg_match('/^[A-Za-z0-9+\/=]+$/', $c);
+            $shown = $isAuth ? '(認証情報)' : $c;
+            // 535 = ユーザー名・パスワード違い / 504・502 = その認証方式に未対応
+            $hint = !$isAuth ? '' : match (true) {
+                $code === 535 || $code === 534 => '（ユーザー名・パスワードを確認してください）',
+                $code === 504 || $code === 502 => '（この認証方式にサーバーが対応していません。config.php の mail の auth を変えてみてください）',
+                $code === 0 => '（ユーザー名・パスワード違いで切断された可能性があります）',
+                default => '（ユーザー名・パスワードと認証方式を確認してください）',
+            };
             throw new RuntimeException("SMTPエラー: $shown → " . (trim($text) !== '' ? trim($text) : '応答なし') . $hint);
         }
         return $text;
@@ -86,9 +93,31 @@ function smtp_send(string $to, string $subject, string $body, ?string $replyTo =
             $ehlo = $cmd("EHLO $me", [250]);
         }
         if (mailc('user', '') !== '') {
-            $cmd('AUTH LOGIN', [334]);
-            $cmd(base64_encode((string)mailc('user')), [334]);
-            $cmd(base64_encode((string)mailc('pass')), [235]);
+            // EHLO の返事から、サーバーが対応している認証方式を読み取る（例: "250-AUTH PLAIN LOGIN"）
+            $offered = [];
+            if (preg_match_all('/^250[ -]AUTH[ =](.+)$/mi', $ehlo, $mm)) {
+                foreach ($mm[1] as $line) $offered = array_merge($offered, preg_split('/\s+/', strtoupper(trim($line))));
+            }
+            $want = strtoupper((string)mailc('auth', 'auto'));
+            if ($want === 'AUTO') {
+                if (!$offered) {
+                    throw new RuntimeException('SMTPサーバーが認証方式を提示していません。暗号化（secure）を tls か ssl にすると認証できるサーバーが多いです'
+                        . ($secure === '' ? '（現在は暗号化なし）' : ''));
+                }
+                $want = in_array('PLAIN', $offered, true) ? 'PLAIN' : (in_array('LOGIN', $offered, true) ? 'LOGIN' : '');
+                if ($want === '') throw new RuntimeException('SMTPサーバーの認証方式（' . implode(', ', $offered) . '）には対応していません。PLAIN か LOGIN が使えるSMTPサーバーを指定してください');
+            }
+            $user = (string)mailc('user');
+            $pass = (string)mailc('pass');
+            if ($want === 'PLAIN') {
+                $cmd('AUTH PLAIN ' . base64_encode("\0" . $user . "\0" . $pass), [235]);
+            } elseif ($want === 'LOGIN') {
+                $cmd('AUTH LOGIN', [334]);
+                $cmd(base64_encode($user), [334]);
+                $cmd(base64_encode($pass), [235]);
+            } else {
+                throw new RuntimeException("config.php の mail の auth に指定できるのは auto / plain / login です（現在: $want）");
+            }
         }
         $cmd("MAIL FROM:<$from>", [250]);
         $cmd("RCPT TO:<$to>", [250, 251]);

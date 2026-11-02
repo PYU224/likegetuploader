@@ -97,6 +97,7 @@ return [
         'secure'    => 'tls',   // 'tls' = STARTTLS(587) / 'ssl' = SSL(465) / '' = 暗号化なし
         'user'      => '',      // SMTP認証のユーザー名（不要なら空）
         'pass'      => '',
+        'auth'      => 'auto',  // 認証方式: 'auto'（サーバーに合わせて自動）/ 'plain' / 'login'
         'from'      => 'noreply@example.com', // 送信元（SMTPサーバーで送信が許可されたアドレス）
         'from_name' => '',      // 空ならサイト名
         'to'        => 'admin@example.com',   // 通知を受け取るアドレス

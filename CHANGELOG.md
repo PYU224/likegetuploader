@@ -3,6 +3,14 @@
 このプロジェクトの主な変更点を記録します。
 書式は [Keep a Changelog](https://keepachangelog.com/ja/1.1.0/) に、バージョン番号は [セマンティック バージョニング](https://semver.org/lang/ja/) に従います。
 
+## 1.3.5 - 2026-11-01
+
+### 修正
+- メール通知で、AUTH LOGIN に対応していないSMTPサーバーだと「504 5.5.4 AUTH LOGIN not supported」で送れなかった問題を修正
+  - サーバーが対応している認証方式を読み取り、AUTH PLAIN / AUTH LOGIN から自動で選ぶようにした
+  - `config.php` の `mail` に `auth`（`auto` / `plain` / `login`）を追加。書かなければ `auto`
+- SMTPエラーの説明を、原因に合わせて出し分けるようにした（パスワード違い / 認証方式が非対応 / 暗号化しないと認証できないサーバー など）
+
 ## 1.3.4 - 2026-10-30
 
 ### 追加
